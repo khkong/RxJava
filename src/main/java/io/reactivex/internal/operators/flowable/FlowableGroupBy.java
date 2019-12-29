@@ -262,7 +262,7 @@ public final class FlowableGroupBy<T, K, V> extends AbstractFlowableWithUpstream
             if (groupCount.decrementAndGet() == 0) {
                 upstream.cancel();
 
-                if (getAndIncrement() == 0) {
+                if (!outputFused && getAndIncrement() == 0) {
                     queue.clear();
                 }
             }
@@ -288,7 +288,6 @@ public final class FlowableGroupBy<T, K, V> extends AbstractFlowableWithUpstream
 
             for (;;) {
                 if (cancelled.get()) {
-                    q.clear();
                     return;
                 }
 
@@ -710,17 +709,25 @@ public final class FlowableGroupBy<T, K, V> extends AbstractFlowableWithUpstream
                 produced++;
                 return v;
             }
-            int p = produced;
-            if (p != 0) {
-                produced = 0;
-                parent.upstream.request(p);
-            }
+            tryReplenish();
             return null;
         }
 
         @Override
         public boolean isEmpty() {
-            return queue.isEmpty();
+            if (queue.isEmpty()) {
+                tryReplenish();
+                return true;
+            }
+            return false;
+        }
+
+        void tryReplenish() {
+            int p = produced;
+            if (p != 0) {
+                produced = 0;
+                parent.upstream.request(p);
+            }
         }
 
         @Override
